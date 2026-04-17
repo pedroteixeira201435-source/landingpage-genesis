@@ -18,6 +18,7 @@ export interface QuizState {
   businessType: BusinessType;
   name: string;
   email: string;
+  phone: string;
 }
 
 export const QUESTIONS: Question[] = [

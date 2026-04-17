@@ -42,6 +42,7 @@ export default function App() {
     businessType: 'Mixed',
     name: '',
     email: '',
+    phone: '',
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -63,6 +64,12 @@ export default function App() {
       return 0;
     }
   }, [quizState.answers, quizState.businessType]);
+
+  const scoreColor = useMemo(() => {
+    if (score < 50) return '#EF4444'; // Red-500
+    if (score <= 80) return '#F59E0B'; // Amber-500
+    return '#017E84'; // Accent (Teal)
+  }, [score]);
 
   const monthlyLoss = useMemo(() => {
     try {
@@ -119,7 +126,7 @@ export default function App() {
 
   const sendLeadToGoogleSheets = async (data: any) => {
     // URL fornecido pelo usuário
-    const scriptUrl = 'https://script.google.com/macros/s/AKfycbwX9PKsGr-t_4aiBEEgTjJMiBQmxY2GENJssjCCX96GfGPySN8CJMBipnPK3tJksOD6Rg/exec';
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycby4GMPSuqJgVXwAn80FebKsN39y5WTFnKaQWz8nmbUXR_3KaJaXJOefaZa-jxqMHWa0Qw/exec';
 
     setIsSendingLead(true);
     try {
@@ -167,13 +174,29 @@ export default function App() {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       const canvas = await html2canvas(element, { 
-        scale: 2,
+        scale: 1.2, // Lower scale for better stability on mobile/Vercel
         useCORS: true,
         allowTaint: true,
-        logging: true, // Enable logging for debugging
+        logging: false, // Turn off logging for production-like feel
         backgroundColor: '#F9FAFB',
         width: element.offsetWidth,
         height: element.offsetHeight,
+        onclone: (doc) => {
+          // Force elements to be visible and stable for the screenshot
+          const el = doc.getElementById('report-content');
+          if (el) {
+            el.style.padding = '20px';
+            el.style.width = '1000px'; // Force a readable width for the capture
+            
+            // Remove blurry backgrounds or complex filters that break html2canvas
+            const blurs = el.querySelectorAll('.backdrop-blur-lg, .blur-3xl');
+            blurs.forEach((b: any) => {
+              b.style.backdropFilter = 'none';
+              b.style.filter = 'none';
+              b.style.display = 'none'; // Hide decorative blurs for the PDF
+            });
+          }
+        }
       });
 
       // Restore scroll
@@ -456,6 +479,17 @@ export default function App() {
                         onChange={(e) => setQuizState(prev => ({ ...prev, email: e.target.value }))}
                       />
                     </div>
+                    <div className="space-y-4">
+                      <Label htmlFor="phone" className="text-xs font-bold uppercase tracking-wider text-[rgba(113,75,103,0.6)]">Phone Number</Label>
+                      <Input 
+                        id="phone" 
+                        type="tel" 
+                        placeholder="+264 81 123 4567" 
+                        className="h-14 border-2 focus:border-accent text-base"
+                        value={quizState.phone}
+                        onChange={(e) => setQuizState(prev => ({ ...prev, phone: e.target.value }))}
+                      />
+                    </div>
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-wider text-[rgba(113,75,103,0.6)]">Approximate Annual Revenue</Label>
                       <RadioGroup 
@@ -473,7 +507,7 @@ export default function App() {
                     </div>
                     <Button 
                       className="w-full btn-secondary h-14 text-lg mt-4 disabled:opacity-50" 
-                      disabled={!quizState.name || !quizState.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(quizState.email) || isSendingLead}
+                      disabled={!quizState.name || !quizState.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(quizState.email) || !quizState.phone || isSendingLead}
                       onClick={() => {
                         try {
                           // Verificar se o email já foi usado nesta sessão/máquina
@@ -496,6 +530,7 @@ export default function App() {
                         sendLeadToGoogleSheets({
                           name: quizState.name,
                           email: quizState.email,
+                          phone: quizState.phone,
                           revenue: quizState.revenue,
                           score: scoreValue,
                           answers: quizState.answers
@@ -516,19 +551,19 @@ export default function App() {
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-6 md:gap-10">
-                    <div className="sleek-card flex flex-col items-center justify-center space-y-6 bg-white text-primary border-b-8 border-accent py-10">
+                    <div className={`sleek-card flex flex-col items-center justify-center space-y-6 bg-white py-10 border-b-8`} style={{ borderBottomColor: scoreColor }}>
                       <div className="relative w-48 h-48 md:w-56 md:h-56 flex items-center justify-center">
-                        <svg className="w-full h-full transform -rotate-90">
-                          <circle cx="112" cy="112" r="100" stroke="currentColor" strokeWidth="16" fill="transparent" className="text-[rgba(113,75,103,0.05)]" />
+                        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 224 224">
+                          <circle cx="112" cy="112" r="100" stroke="#f1f5f9" strokeWidth="16" fill="transparent" />
                           <circle
-                            cx="112" cy="112" r="100" stroke="currentColor" strokeWidth="16" fill="transparent"
+                            cx="112" cy="112" r="100" stroke={scoreColor} strokeWidth="16" fill="transparent"
                             strokeDasharray={628.3} strokeDashoffset={isNaN(score) ? 628.3 : 628.3 - (628.3 * score) / 100}
-                            className="text-accent transition-all duration-1000 ease-out"
+                            className="transition-all duration-1000 ease-out"
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className="text-5xl md:text-7xl font-black text-black leading-none">{isNaN(score) ? 0 : score}</span>
-                          <span className="text-[10px] md:text-xs font-bold uppercase tracking-[2px] opacity-50">Score</span>
+                          <span className="text-5xl md:text-7xl font-black leading-none" style={{ color: scoreColor }}>{isNaN(score) ? 0 : score}</span>
+                          <span className="text-[10px] md:text-xs font-bold uppercase tracking-[2px] opacity-50" style={{ color: scoreColor }}>Score</span>
                         </div>
                       </div>
                       <p className="text-center text-muted font-medium max-w-xs leading-relaxed text-sm md:text-base px-4">
