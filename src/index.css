@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #714B67;
+  --color-accent: #017E84;
+  --color-bg: #F9FAFB;
+  --color-text: #2C3E50;
+  --color-muted: #7F8C8D;
+  --color-white: #FFFFFF;
+  
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Inter', system-ui, -apple-system, sans-serif;
+
+  --radius-lg: 12px;
+  --radius-md: 8px;
+  --radius-sm: 6px;
+
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  
+  --color-brand-purple: #714B67;
+  --color-brand-teal: #017E84;
+  --color-brand-dark: #5A3C52;
+  --color-brand-light: #F9FAFB;
+
+  --color-border: #E5E7EB;
+  --color-input: #E5E7EB;
+  --color-ring: var(--accent);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-[rgba(1,126,132,0.5)];
+  }
+  body {
+    @apply bg-bg text-text font-sans;
+  }
+}
+
+.sleek-card {
+  @apply bg-white rounded-2xl p-6 md:p-8 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.05),0_10px_10px_-5px_rgba(0,0,0,0.02)];
+}
+
+.sidebar-box {
+  @apply bg-white rounded-2xl p-4 md:p-6 border-l-4 border-accent shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)];
+}
+
+.loss-gauge {
+  @apply bg-primary rounded-2xl p-6 md:p-8 text-white flex flex-col items-center justify-center text-center;
+}
+
+.btn-primary {
+  @apply bg-primary text-white hover:bg-brand-dark transition-all duration-200 px-6 md:px-10 py-3 md:py-4 rounded-full font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-base md:text-lg;
+}
+
+.btn-secondary {
+  @apply bg-accent text-white hover:bg-[rgba(1,126,132,0.9)] transition-all duration-200 px-6 md:px-10 py-3 md:py-4 rounded-full font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-base md:text-lg;
+}
+
+.quiz-option {
+  @apply border-2 border-[#E2E8F0] rounded-2xl p-4 md:p-6 cursor-pointer transition-all duration-200 flex items-center font-medium text-base md:text-lg bg-white hover:border-[rgba(113,75,103,0.3)] hover:bg-[rgba(113,75,103,0.05)];
+}
+
+.quiz-option-selected {
+  @apply border-primary bg-[rgba(113,75,103,0.1)] shadow-[0_0_0_1px_var(--primary)];
+}
