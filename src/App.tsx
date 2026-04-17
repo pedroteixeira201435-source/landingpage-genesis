@@ -127,7 +127,7 @@ export default function App() {
         method: 'POST',
         mode: 'no-cors',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'text/plain;charset=utf-8',
         },
         body: JSON.stringify(data),
       });
@@ -153,30 +153,27 @@ export default function App() {
     try {
       const element = document.getElementById('report-content');
       if (!element) {
-        throw new Error('Report content element not found');
+        console.error('Report content element not found');
+        alert('Erro: Conteúdo do relatório não encontrado. Por favor, tente novamente.');
+        setIsGeneratingPDF(false);
+        return;
       }
 
-      // Store scroll position and move to top for clean capture
+      // Store scroll position
       const scrollPos = window.scrollY;
       window.scrollTo(0, 0);
 
-      // Give browser time to adjust layout
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Wait for any animations or rendering to settle
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       const canvas = await html2canvas(element, { 
         scale: 2,
         useCORS: true,
-        logging: false,
+        allowTaint: true,
+        logging: true, // Enable logging for debugging
         backgroundColor: '#F9FAFB',
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight,
-        onclone: (clonedDoc) => {
-          // You could fix styles here if needed
-          const clonedElement = clonedDoc.getElementById('report-content');
-          if (clonedElement) {
-             clonedElement.style.padding = '40px';
-          }
-        }
+        width: element.offsetWidth,
+        height: element.offsetHeight,
       });
 
       // Restore scroll
@@ -186,23 +183,32 @@ export default function App() {
         throw new Error('Canvas generation failed');
       }
 
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF('p', 'mm', 'a4', true);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
-      // If content is taller than one page, we just scale it to fit or we could add multiple pages
-      // For now, scaling to fit the width and letting it be long is common for these reports
-      // but let's at least make sure it doesn't look terrible
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+      // If content is taller than one page, add multiple pages
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pdfHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pdfHeight;
+      }
       
-      pdf.save(`Genesis_ERP_Health_Scorecard_${quizState.name.replace(/\s+/g, '_') || 'Report'}.pdf`);
+      pdf.save(`Genesis_ERP_Audit_${quizState.name.replace(/\s+/g, '_') || 'Report'}.pdf`);
     } catch (error) {
       console.error('PDF Generation Error:', error);
-      alert('Desculpe, houve um erro ao gerar o seu PDF. Por favor, tente novamente.');
+      alert('Houve um erro técnico ao gerar seu PDF. Por favor, tire um print da tela ou tente novamente em instantes.');
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -469,17 +475,23 @@ export default function App() {
                       className="w-full btn-secondary h-14 text-lg mt-4 disabled:opacity-50" 
                       disabled={!quizState.name || !quizState.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(quizState.email) || isSendingLead}
                       onClick={() => {
-                        // Verificar se o email já foi usado nesta sessão/máquina
-                        const submittedLeads = JSON.parse(localStorage.getItem('genesis_submitted_leads') || '[]');
-                        if (submittedLeads.includes(quizState.email)) {
-                          alert('This email has already been used to generate a report. Please contact us for a detailed re-evaluation.');
-                          return;
+                        try {
+                          // Verificar se o email já foi usado nesta sessão/máquina
+                          const submittedLeadsRaw = localStorage.getItem('genesis_submitted_leads');
+                          const submittedLeads = submittedLeadsRaw ? JSON.parse(submittedLeadsRaw) : [];
+                          
+                          if (Array.isArray(submittedLeads) && submittedLeads.includes(quizState.email)) {
+                            alert('Este email já foi usado para gerar um relatório hoje. Caso precise de uma nova análise, entre em contato conosco.');
+                            return;
+                          }
+                        } catch (e) {
+                          console.warn('LocalStorage not available', e);
                         }
 
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                         setIsSubmitted(true);
                         
-                        // Enviar dados para o Google Sheets
+                        // Enviar dados para o Google Sheets (Background)
                         const scoreValue = calculateScore(quizState.answers);
                         sendLeadToGoogleSheets({
                           name: quizState.name,
@@ -487,7 +499,7 @@ export default function App() {
                           revenue: quizState.revenue,
                           score: scoreValue,
                           answers: quizState.answers
-                        });
+                        }).catch(err => console.error('Failed to send lead:', err));
                       }}
                     >
                       {isSendingLead ? 'Analysing Data...' : 'Show My Score \u2192'}
@@ -515,7 +527,7 @@ export default function App() {
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className="text-6xl md:text-7xl font-black text-black">{isNaN(score) ? 0 : score}</span>
+                          <span className="text-5xl md:text-7xl font-black text-black leading-none">{isNaN(score) ? 0 : score}</span>
                           <span className="text-[10px] md:text-xs font-bold uppercase tracking-[2px] opacity-50">Score</span>
                         </div>
                       </div>
@@ -532,7 +544,7 @@ export default function App() {
                       </div>
                       <div className="text-center space-y-2 md:space-y-3">
                         <h3 className="text-[10px] md:text-xs font-bold text-muted uppercase tracking-[2px]">Estimated Monthly Loss</h3>
-                        <div className="text-5xl md:text-6xl font-black text-primary">
+                        <div className="text-4xl md:text-6xl font-black text-primary leading-none">
                           N$ {isNaN(monthlyLoss) ? 0 : monthlyLoss.toLocaleString()}
                         </div>
                       </div>
@@ -567,10 +579,10 @@ export default function App() {
                   </div>
 
                   {/* Pie Chart Section */}
-                  <div className="sleek-card space-y-8">
-                    <h3 className="text-2xl font-bold text-primary border-b-4 border-[rgba(113,75,103,0.1)] pb-3 inline-block">Where You Are Losing Money</h3>
-                    <div className="grid md:grid-cols-[300px_1fr] gap-12 items-center">
-                      <div className="relative w-64 h-64 mx-auto">
+                  <div className="sleek-card space-y-8 overflow-hidden">
+                    <h3 className="text-xl md:text-2xl font-bold text-primary border-b-4 border-[rgba(113,75,103,0.1)] pb-3 inline-block">Where You Are Losing Money</h3>
+                    <div className="grid md:grid-cols-[250px_1fr] gap-8 md:gap-12 items-center">
+                      <div className="relative w-48 h-48 md:w-64 md:h-64 mx-auto">
                         <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
                           {/* Finance */}
                           <circle r="16" cx="16" cy="16" fill="transparent" stroke="#714B67" strokeWidth="32" 
@@ -589,18 +601,18 @@ export default function App() {
                             strokeDashoffset={-(categories.financePiePct + categories.inventoryPiePct + categories.salesPiePct)} />
                         </svg>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                         {[
                           { label: 'Finance & Cash', color: 'bg-[#714B67]', pct: categories.financePiePct },
                           { label: 'Inventory & Ops', color: 'bg-[#017E84]', pct: categories.inventoryPiePct },
                           { label: 'Sales & Customers', color: 'bg-[#00A09D]', pct: categories.salesPiePct },
                           { label: 'Taxes & Compliance', color: 'bg-[#E54D42]', pct: categories.compliancePiePct },
                         ].map((item, i) => (
-                          <div key={i} className="flex items-center space-x-3 p-4 rounded-xl bg-bg border border-slate-100">
-                            <div className={`w-4 h-4 rounded-full ${item.color}`} />
+                          <div key={i} className="flex items-center space-x-3 p-3 md:p-4 rounded-xl bg-bg border border-slate-100">
+                            <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full ${item.color}`} />
                             <div>
-                              <div className="text-xs font-bold text-muted uppercase tracking-wider">{item.label}</div>
-                              <div className="text-lg font-black text-primary">{Math.round(item.pct)}%</div>
+                              <div className="text-[10px] md:text-xs font-bold text-muted uppercase tracking-wider leading-none mb-1">{item.label}</div>
+                              <div className="text-base md:text-lg font-black text-primary leading-none">{Math.round(item.pct)}%</div>
                             </div>
                           </div>
                         ))}
@@ -647,7 +659,7 @@ export default function App() {
                     </div>
                     <Button 
                       onClick={scrollToCalendly}
-                      className="w-full md:w-auto mt-10 bg-white text-orange-600 hover:bg-[rgba(255,255,255,0.9)] h-16 text-xl px-12 rounded-xl font-black shadow-xl transition-all hover:scale-[1.02]"
+                      className="w-full md:w-auto mt-10 bg-white text-orange-600 hover:bg-[rgba(255,255,255,0.9)] h-auto py-5 md:h-16 text-base md:text-xl px-6 md:px-12 rounded-xl font-black shadow-xl transition-all hover:scale-[1.02] whitespace-normal leading-tight text-center"
                     >
                       Yes, I Want My Free Audit + Strategy Call
                     </Button>
