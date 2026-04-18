@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronRight, 
   ChevronLeft, 
-  Download, 
   Calendar, 
   TrendingDown, 
   CheckCircle2, 
@@ -37,8 +36,17 @@ import {
   getMaturityLevel,
   getImpactFacts
 } from './lib/scoring';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import { PopupModal } from 'react-calendly';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  ResponsiveContainer, 
+  Cell,
+  PieChart, 
+  Pie 
+} from 'recharts';
 
 type View = 'landing' | 'quiz' | 'results';
 
@@ -56,14 +64,14 @@ export default function App() {
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const calendlyRef = useRef<HTMLDivElement>(null);
+  const [isCalendlyOpen, setIsCalendlyOpen] = useState(false);
 
   const currentMonth = useMemo(() => 
     new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date()),
   []);
 
-  const scrollToCalendly = () => {
-    calendlyRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const openCalendly = () => {
+    setIsCalendlyOpen(true);
   };
 
   const score = useMemo(() => {
@@ -144,7 +152,6 @@ export default function App() {
     }
   };
 
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSendingLead, setIsSendingLead] = useState(false);
   const isQuizComplete = Object.keys(quizState.answers).length === QUESTIONS.length;
 
@@ -174,90 +181,6 @@ export default function App() {
       console.error('Error sending lead to Google Sheets:', error);
     } finally {
       setIsSendingLead(false);
-    }
-  };
-
-  const downloadPDF = async () => {
-    if (isGeneratingPDF) return;
-    setIsGeneratingPDF(true);
-    
-    try {
-      const element = document.getElementById('report-content');
-      if (!element) {
-        console.error('Report content element not found');
-        alert('Erro: Conteúdo do relatório não encontrado. Por favor, tente novamente.');
-        setIsGeneratingPDF(false);
-        return;
-      }
-
-      // Store scroll position
-      const scrollPos = window.scrollY;
-      window.scrollTo(0, 0);
-
-      // Wait for any animations or rendering to settle
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const canvas = await html2canvas(element, { 
-        scale: 1.2, // Lower scale for better stability on mobile/Vercel
-        useCORS: true,
-        allowTaint: true,
-        logging: false, // Turn off logging for production-like feel
-        backgroundColor: '#F9FAFB',
-        width: element.offsetWidth,
-        height: element.offsetHeight,
-        onclone: (doc) => {
-          // Force elements to be visible and stable for the screenshot
-          const el = doc.getElementById('report-content');
-          if (el) {
-            el.style.padding = '20px';
-            el.style.width = '1000px'; // Force a readable width for the capture
-            
-            // Remove blurry backgrounds or complex filters that break html2canvas
-            const blurs = el.querySelectorAll('.backdrop-blur-lg, .blur-3xl');
-            blurs.forEach((b: any) => {
-              b.style.backdropFilter = 'none';
-              b.style.filter = 'none';
-              b.style.display = 'none'; // Hide decorative blurs for the PDF
-            });
-          }
-        }
-      });
-
-      // Restore scroll
-      window.scrollTo(0, scrollPos);
-
-      if (!canvas) {
-        throw new Error('Canvas generation failed');
-      }
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF('p', 'mm', 'a4', true);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      // If content is taller than one page, add multiple pages
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
-      heightLeft -= pdfHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
-        heightLeft -= pdfHeight;
-      }
-      
-      pdf.save(`Genesis_ERP_Audit_${quizState.name.replace(/\s+/g, '_') || 'Report'}.pdf`);
-    } catch (error) {
-      console.error('PDF Generation Error:', error);
-      alert('Houve um erro técnico ao gerar seu PDF. Por favor, tire um print da tela ou tente novamente em instantes.');
-    } finally {
-      setIsGeneratingPDF(false);
     }
   };
 
@@ -680,24 +603,8 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-6 md:gap-8">
-                    <div className="sleek-card bg-primary text-white p-10 md:p-12 border-none shadow-2xl space-y-8 relative overflow-hidden group">
-                      <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-24 -mt-24 blur-3xl group-hover:scale-110 transition-transform" />
-                      <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-[3px] text-white/40">Scalability Potential</div>
-                        <div className="text-6xl font-black tracking-tighter">{categories.scalabilityIndex}%</div>
-                      </div>
-                      <div className="space-y-4">
-                        <Progress value={categories.scalabilityIndex} className="h-1 bg-white/10 rounded-none" />
-                        <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest leading-relaxed">
-                          {categories.scalabilityIndex < 40 ? "LOCKED: Manual tasks are blocking top-line growth." : 
-                           categories.scalabilityIndex < 75 ? "CONSTRAINED: Legacy bottlenecks limiting expansion velocity." : 
-                           "UNLOCKED: Infrastructure ready for 5x scale operations."}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="sleek-card border-none shadow-2xl bg-slate-50 p-10 md:p-12 space-y-8 relative overflow-hidden">
+                  <div className="grid md:grid-cols-1 gap-6 md:gap-8">
+                    <div className="sleek-card border-none shadow-2xl bg-slate-50 p-10 md:p-12 space-y-8 relative overflow-hidden group min-h-[400px] flex flex-col">
                       <div className="space-y-2">
                         <div className="text-[10px] font-black uppercase tracking-[3px] text-primary/40">Regional Position</div>
                         <div className="flex items-baseline gap-4">
@@ -714,7 +621,30 @@ export default function App() {
                            )}
                         </div>
                       </div>
-                      <div className="space-y-4">
+
+                      <div className="flex-1 w-full relative pt-4">
+                        <ResponsiveContainer width="100%" height={160}>
+                          <PieChart>
+                            <Pie
+                              data={[
+                                { value: 100 - categories.benchmarkPercentile, fill: '#017E84' },
+                                { value: categories.benchmarkPercentile, fill: 'rgba(15, 23, 42, 0.05)' },
+                              ]}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={45}
+                              outerRadius={60}
+                              paddingAngle={0}
+                              dataKey="value"
+                              startAngle={90}
+                              endAngle={-270}
+                              stroke="none"
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className="space-y-4 mt-auto">
                         <div className="flex justify-between items-end border-b border-primary/10 pb-2">
                            <span className="text-[10px] font-black text-primary/40 uppercase tracking-[2px]">Market Benchmark</span>
                            <span className="text-xs font-black text-accent">Namibian SME SADC Average</span>
@@ -863,7 +793,7 @@ export default function App() {
                          </div>
                          
                          <Button 
-                           onClick={scrollToCalendly}
+                           onClick={openCalendly}
                            className="w-full md:w-auto bg-primary text-white hover:bg-primary/95 min-h-[64px] h-auto py-5 px-6 md:px-20 text-[10px] md:text-xs font-black uppercase tracking-[2px] md:tracking-[4px] shadow-2xl group relative overflow-hidden active:scale-[0.98] transition-all whitespace-normal text-center flex items-center justify-center"
                          >
                            <span className="relative z-10">Confirm My Strategy Call & Audit</span>
@@ -876,32 +806,14 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col md:flex-row gap-6 justify-center">
-                    <Button 
-                      onClick={downloadPDF} 
-                      disabled={isGeneratingPDF}
-                      className="bg-accent text-white hover:bg-accent/95 h-16 text-[10px] font-black uppercase tracking-[3px] px-12 rounded-none border-none shadow-xl disabled:opacity-50"
-                    >
-                      <Download className={`mr-2 w-4 h-4 ${isGeneratingPDF ? 'animate-bounce' : ''}`} /> 
-                      {isGeneratingPDF ? 'Encrypting PDF...' : 'Download Full Audit PDF'}
-                    </Button>
-                  </div>
+                  <div className="flex flex-col md:flex-row gap-6 justify-center" />
 
-                  {/* Calendly Inline Widget */}
-                  <div ref={calendlyRef} className="sleek-card border-none shadow-2xl bg-white overflow-hidden p-0 scroll-mt-20">
-                    <div className="p-10 md:p-14 border-b border-slate-50 text-center md:text-left space-y-4">
-                      <h3 className="text-3xl md:text-4xl font-black text-primary uppercase tracking-tighter">Confirmation Interface</h3>
-                      <p className="text-[10px] font-black text-muted uppercase tracking-[3px]">Secure Pedro Teixeira's roadmap session below.</p>
-                    </div>
-                    <div className="h-[700px] w-full">
-                      <iframe
-                        src="https://calendly.com/pedroteixeira201435/genesis-meetings?embed_domain=ai-studio&embed_type=Inline"
-                        width="100%"
-                        height="100%"
-                        frameBorder="0"
-                      ></iframe>
-                    </div>
-                  </div>
+                  <PopupModal 
+                    url="https://calendly.com/pedroteixeira201435/genesis-meetings"
+                    onModalClose={() => setIsCalendlyOpen(false)}
+                    open={isCalendlyOpen}
+                    rootElement={document.getElementById("root")!}
+                  />
                 </div>
               )}
             </motion.div>
@@ -936,18 +848,10 @@ export default function App() {
             className="fixed bottom-0 left-0 right-0 p-4 bg-[rgba(255,255,255,0.8)] backdrop-blur-lg border-t border-slate-200 z-50 md:hidden flex gap-3"
           >
             <Button 
-              onClick={scrollToCalendly}
+              onClick={openCalendly}
               className="flex-1 bg-accent text-white h-14 rounded-xl font-bold text-sm shadow-lg active:scale-95 transition-all"
             >
               Book Strategy Call
-            </Button>
-            <Button 
-              onClick={downloadPDF}
-              disabled={isGeneratingPDF}
-              variant="outline"
-              className="w-14 h-14 rounded-xl border-2 border-slate-200 flex items-center justify-center active:scale-95 transition-all disabled:opacity-50"
-            >
-              <Download className={`w-5 h-5 text-primary ${isGeneratingPDF ? 'animate-spin' : ''}`} />
             </Button>
           </motion.div>
         )}
