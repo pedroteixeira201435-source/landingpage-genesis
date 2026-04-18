@@ -1,66 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #714B67;
+  --color-primary: #0F172A;
   --color-accent: #017E84;
-  --color-bg: #F9FAFB;
-  --color-text: #2C3E50;
-  --color-muted: #7F8C8D;
+  --color-bg: #F8FAFC;
+  --color-text: #1E293B;
+  --color-muted: #64748B;
   --color-white: #FFFFFF;
   
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-heading: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Space Grotesk', system-ui, -apple-system, sans-serif;
 
-  --radius-lg: 12px;
-  --radius-md: 8px;
-  --radius-sm: 6px;
+  --radius-lg: 2px;
+  --radius-md: 2px;
+  --radius-sm: 1px;
+
+  --spacing-18: 4.5rem;
 
   --color-background: var(--bg);
   --color-foreground: var(--text);
   
-  --color-brand-purple: #714B67;
   --color-brand-teal: #017E84;
-  --color-brand-dark: #5A3C52;
-  --color-brand-light: #F9FAFB;
+  --color-brand-dark: #020617;
+  --color-brand-light: #F8FAFC;
 
-  --color-border: #E5E7EB;
-  --color-input: #E5E7EB;
+  --color-border: #E2E8F0;
+  --color-input: #E2E8F0;
   --color-ring: var(--accent);
 }
 
 @layer base {
   * {
-    @apply border-border outline-[rgba(1,126,132,0.5)];
+    @apply border-border outline-[rgba(1,126,132,0.3)];
   }
   body {
-    @apply bg-bg text-text font-sans;
+    @apply bg-bg text-text font-sans antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight;
   }
 }
 
 .sleek-card {
-  @apply bg-white rounded-2xl p-6 md:p-8 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.05),0_10px_10px_-5px_rgba(0,0,0,0.02)];
+  @apply bg-white rounded-sm p-6 md:p-10 shadow-[0_2px_4px_rgba(0,0,0,0.02),0_10px_20px_rgba(0,0,0,0.03)] border border-slate-100;
 }
 
 .sidebar-box {
-  @apply bg-white rounded-2xl p-4 md:p-6 border-l-4 border-accent shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)];
-}
-
-.loss-gauge {
-  @apply bg-primary rounded-2xl p-6 md:p-8 text-white flex flex-col items-center justify-center text-center;
+  @apply bg-white rounded-sm p-5 md:p-8 border-l-[6px] border-accent shadow-sm;
 }
 
 .btn-primary {
-  @apply bg-primary text-white hover:bg-brand-dark transition-all duration-200 px-6 md:px-10 py-3 md:py-4 rounded-full font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-base md:text-lg;
+  @apply bg-primary text-white hover:bg-brand-dark transition-all duration-300 px-8 py-4 rounded-sm font-bold cursor-pointer disabled:opacity-50 active:scale-[0.98] text-base uppercase tracking-wider;
 }
 
 .btn-secondary {
-  @apply bg-accent text-white hover:bg-[rgba(1,126,132,0.9)] transition-all duration-200 px-6 md:px-10 py-3 md:py-4 rounded-full font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-base md:text-lg;
+  @apply bg-accent text-white hover:bg-[rgba(1,126,132,0.9)] transition-all duration-300 px-8 py-4 rounded-sm font-bold cursor-pointer disabled:opacity-50 active:scale-[0.98] text-base uppercase tracking-wider;
 }
 
 .quiz-option {
-  @apply border-2 border-[#E2E8F0] rounded-2xl p-4 md:p-6 cursor-pointer transition-all duration-200 flex items-center font-medium text-base md:text-lg bg-white hover:border-[rgba(113,75,103,0.3)] hover:bg-[rgba(113,75,103,0.05)];
+  @apply border-2 border-slate-200 rounded-sm p-4 md:p-6 cursor-pointer transition-all duration-200 flex items-center font-medium text-base md:text-lg bg-white hover:border-accent hover:bg-slate-50 relative overflow-hidden;
 }
 
 .quiz-option-selected {
-  @apply border-primary bg-[rgba(113,75,103,0.1)] shadow-[0_0_0_1px_var(--primary)];
+  @apply border-accent bg-accent/5 ring-1 ring-accent;
+}
+
+.glow-text {
+  text-shadow: 0 0 20px rgba(1, 126, 132, 0.3);
 }

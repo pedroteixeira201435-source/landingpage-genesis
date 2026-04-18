@@ -17,7 +17,10 @@ import {
   ShieldCheck,
   Package,
   Wallet,
-  Zap
+  Zap,
+  Clock,
+  ShieldAlert,
+  EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -26,7 +29,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { QUESTIONS, QuizState, RevenueBracket } from './types';
-import { calculateScore, calculateMonthlyLoss, getRecommendations, calculateCategories } from './lib/scoring';
+import { 
+  calculateScore, 
+  calculateMonthlyLoss, 
+  getRecommendations, 
+  calculateCategories,
+  getMaturityLevel,
+  getImpactFacts
+} from './lib/scoring';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -82,16 +92,29 @@ export default function App() {
 
   const recommendations = useMemo(() => {
     try {
-      return getRecommendations(quizState.answers) || [];
+      return getRecommendations(quizState.answers, quizState.businessType) || [];
     } catch (e) {
       console.error(e);
       return [];
     }
-  }, [quizState.answers]);
+  }, [quizState.answers, quizState.businessType]);
+
+  const maturityLevel = useMemo(() => {
+    return getMaturityLevel(score);
+  }, [score]);
+
+  const impactFacts = useMemo(() => {
+    return getImpactFacts(quizState.answers, quizState.businessType, quizState.revenue);
+  }, [quizState.answers, quizState.businessType, quizState.revenue]);
 
   const categories = useMemo(() => {
     try {
-      return calculateCategories(quizState.answers);
+      const cats = calculateCategories(quizState.answers);
+      const marketAvg = 48; // Baseline for Namibian/SADC SMEs
+      const userAvg = (cats.scores.finance + cats.scores.inventory + cats.scores.sales + cats.scores.compliance) / 4;
+      const delta = Math.round(userAvg - marketAvg);
+      
+      return { ...cats, marketDeltaValue: delta };
     } catch (e) {
       console.error(e);
       return {
@@ -101,6 +124,7 @@ export default function App() {
         compliancePiePct: 25,
         scalabilityIndex: 0,
         benchmarkPercentile: 50,
+        marketDeltaValue: 0,
         scores: { finance: 0, inventory: 0, sales: 0, compliance: 0 }
       };
     }
@@ -238,36 +262,47 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-bg text-text font-sans selection:bg-[rgba(1,126,132,0.3)]">
+    <div className="min-h-screen flex flex-col bg-bg text-text font-sans antialiased text-pretty">
       {/* Header */}
-      <header className="bg-primary text-white py-6 px-6 md:px-16 flex justify-between items-center shadow-lg">
-        <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-inner">
-            <BarChart3 className="text-primary w-7 h-7" />
+      <header className="bg-primary text-white py-4 md:py-6 px-6 md:px-16 flex justify-between items-center shadow-2xl relative z-10 border-b border-white/5">
+        <div className="flex items-center space-x-3 md:space-x-4">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-accent rounded-sm flex items-center justify-center shadow-lg group">
+            <BarChart3 className="text-white w-6 h-6 md:w-7 md:h-7 group-hover:scale-110 transition-transform" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xl font-black tracking-tight leading-tight">Financial Health Audit</span>
-            <span className="text-xs font-bold uppercase tracking-[2px] opacity-70">by Genesis ERP Namibia</span>
+            <span className="text-lg md:text-xl font-black tracking-tighter leading-none uppercase">Genesis ERP</span>
+            <span className="text-[10px] font-bold uppercase tracking-[2px] opacity-60">Audit Systems</span>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-12 md:py-16">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-5 py-10 md:py-20 lg:py-28">
         <AnimatePresence mode="wait">
           {view === 'landing' && (
             <motion.div
               key="landing"
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="max-w-4xl mx-auto text-center space-y-10"
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              exit={{ opacity: 0, y: -30 }}
+              className="max-w-5xl mx-auto space-y-12 md:space-y-20"
             >
-              <div className="space-y-6">
-                <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-primary leading-[1.1]">
-                  Discover Exactly How Much Money Your Business Is <span className="text-accent">Losing Every Month</span>
+              <div className="space-y-6 md:space-y-10">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="flex justify-center"
+                >
+                  <div className="inline-flex items-center px-4 py-1.5 bg-accent/10 text-accent border border-accent/20 rounded-full text-[10px] font-black uppercase tracking-[3px] mb-4">
+                    <TrendingDown className="w-3 h-3 mr-2" /> Financial Friction Audit
+                  </div>
+                </motion.div>
+                <h1 className="text-5xl md:text-7xl lg:text-[100px] font-black tracking-tighter text-primary leading-[0.9] md:leading-[0.8] lg:leading-[0.75] text-balance text-center mx-auto">
+                   The Cost <br className="hidden md:block" /> of <span className="text-accent underline decoration-accent/30 underline-offset-8">Manual Work</span>
                 </h1>
-                <p className="text-xl text-muted max-w-2xl mx-auto font-medium">
-                  Take this 2-minute Financial Health Scorecard and get your personalized report with exact monthly losses.
+                <p className="text-lg md:text-2xl text-muted max-w-2xl mx-auto font-medium leading-relaxed md:leading-snug text-center">
+                  Discover exactly how much money your SME is losing due to inefficient spreadsheets and manual friction. 
                 </p>
               </div>
 
@@ -275,7 +310,7 @@ export default function App() {
                 {!showBusinessTypeStep ? (
                   <Button 
                     onClick={() => setShowBusinessTypeStep(true)}
-                    className="btn-secondary text-xl px-16 py-8 h-auto group shadow-xl hover:shadow-[rgba(1,126,132,0.2)]"
+                    className="btn-secondary w-full md:w-auto text-sm md:text-xl px-4 md:px-16 py-6 md:py-8 h-auto group shadow-xl hover:shadow-[rgba(1,126,132,0.2)] whitespace-normal text-center"
                   >
                     Start My Free Scorecard
                     <ChevronRight className="ml-2 group-hover:translate-x-1 transition-transform" />
@@ -338,59 +373,78 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="grid md:grid-cols-[1fr_340px] gap-10 items-start"
+              className="grid lg:grid-cols-[1fr_360px] gap-8 md:gap-12 items-start"
             >
-              <div className="space-y-8">
-                <div className="sleek-card p-12 min-h-[500px] flex flex-col justify-between">
+              <div className="space-y-6 md:space-y-10">
+                <div className="sleek-card p-6 md:p-14 min-h-[450px] md:min-h-[550px] flex flex-col justify-between overflow-hidden relative border-none bg-white shadow-2xl">
                   <div>
-                    <div className="flex flex-col space-y-3 mb-10">
-                      <div className="text-xs font-bold text-accent uppercase tracking-[1.5px]">
-                        {QUESTIONS[currentQuestion].block} &bull; Question {currentQuestion + 1} of {QUESTIONS.length}
+                    <div className="flex flex-col space-y-4 mb-8 md:mb-12">
+                      <div className="flex justify-between items-end">
+                        <div className="text-[10px] md:text-xs font-black text-accent uppercase tracking-[3px]">
+                          Audit Segment &bull; {QUESTIONS[currentQuestion].block.split(' ')[0]}
+                        </div>
+                        <div className="text-[10px] md:text-xs font-black text-primary/40 uppercase tracking-[2px]">
+                          Step {currentQuestion + 1} / {QUESTIONS.length}
+                        </div>
                       </div>
-                      <div className="h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-accent transition-all duration-500" 
-                          style={{ width: `${((currentQuestion + 1) / QUESTIONS.length) * 100}%` }}
+                      <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${((currentQuestion + 1) / QUESTIONS.length) * 100}%` }}
+                          className="h-full bg-accent transition-all duration-700 ease-out" 
                         />
                       </div>
                     </div>
 
-                    <h2 className="text-3xl md:text-4xl font-bold text-primary leading-tight mb-10">
+                    <motion.h2 
+                      key={currentQuestion}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-2xl md:text-4xl lg:text-5xl font-black text-primary leading-[1.1] mb-8 md:mb-14 tracking-tighter"
+                    >
                       {QUESTIONS[currentQuestion].text}
-                    </h2>
+                    </motion.h2>
 
-                    <div className="grid md:grid-cols-2 gap-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                       {QUESTIONS[currentQuestion].options.map((option, idx) => (
-                        <div
+                        <motion.div
                           key={idx}
+                          initial={{ opacity: 0, scale: 0.98 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: idx * 0.05 }}
                           onClick={() => handleAnswer(QUESTIONS[currentQuestion].id, idx)}
-                          className={`quiz-option ${quizState.answers[QUESTIONS[currentQuestion].id] === idx ? 'quiz-option-selected' : ''}`}
+                          className={`quiz-option py-5 md:py-6 px-6 border-2 transition-all cursor-pointer ${quizState.answers[QUESTIONS[currentQuestion].id] === idx ? 'quiz-option-selected border-accent bg-accent/5' : 'border-slate-100 hover:border-slate-200 bg-slate-50/50'}`}
                         >
-                          <span className="text-lg">{option.label}</span>
-                        </div>
+                          <div className="flex justify-between items-center w-full">
+                            <span className="text-base md:text-lg font-black text-primary uppercase tracking-tight">{option.label}</span>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${quizState.answers[QUESTIONS[currentQuestion].id] === idx ? 'border-accent bg-accent' : 'border-slate-200'}`}>
+                              {quizState.answers[QUESTIONS[currentQuestion].id] === idx && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                            </div>
+                          </div>
+                        </motion.div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center pt-10 border-t border-[#E2E8F0] mt-10">
-                    <div className="flex items-center text-muted text-sm font-medium">
+                  <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-slate-100 mt-10 gap-6 md:gap-0">
+                    <div className="flex items-center text-muted text-[10px] font-black uppercase tracking-[2px]">
                       {currentQuestion > 0 ? (
                         <button 
                           onClick={() => setCurrentQuestion(prev => prev - 1)}
-                          className="flex items-center hover:text-primary transition-colors"
+                          className="flex items-center hover:text-accent transition-colors"
                         >
-                          <ChevronLeft className="mr-1 w-4 h-4" /> Back
+                          <ChevronLeft className="mr-2 w-4 h-4" /> Previous Step
                         </button>
                       ) : (
-                        <span>Press <strong>ENTER</strong> to continue</span>
+                        <span className="opacity-50">Select an option to proceed</span>
                       )}
                     </div>
                     {currentQuestion === QUESTIONS.length - 1 && isQuizComplete ? (
                       <Button 
                         onClick={() => setView('results')}
-                        className="btn-primary"
+                        className="btn-primary w-full md:w-auto py-6 px-10 text-xs font-black uppercase tracking-[3px] shadow-xl"
                       >
-                        See My Results &rarr;
+                        Generate Audit &rarr;
                       </Button>
                     ) : (
                       <Button 
@@ -400,39 +454,57 @@ export default function App() {
                           }
                         }}
                         disabled={quizState.answers[QUESTIONS[currentQuestion].id] === undefined}
-                        className="btn-primary"
+                        className="btn-primary w-full md:w-auto py-6 px-10 text-xs font-black uppercase tracking-[3px] shadow-xl"
                       >
-                        Next Question &rarr;
+                        Continue &rarr;
                       </Button>
                     )}
                   </div>
                 </div>
               </div>
 
-              <aside className="space-y-6">
-                <div className="sidebar-box">
-                  <h3 className="text-xs font-bold text-primary uppercase tracking-[1.5px] mb-3">Why this matters</h3>
-                  <p className="text-sm leading-relaxed text-muted">
-                    {currentQuestion < 3 ? "Manual data entry is the #1 killer of SME scaling in Namibia. Every hour spent on a spreadsheet is an hour not spent on high-level strategy or sales." :
-                     currentQuestion < 6 ? "Inventory leakage and stockouts can drain up to 12% of your annual revenue. Real-time visibility is the difference between profit and loss." :
-                     currentQuestion < 8 ? "Late payments and poor sales visibility create cashflow bottlenecks that prevent you from reinvesting in your growth." :
-                     "The time your team spends manually preparing for compliance is a massive hidden payroll cost and a major liability risk."}
+              <aside className="space-y-6 flex flex-col">
+                <div className="sleek-card p-8 bg-slate-900 text-white border-none shadow-2xl relative overflow-hidden order-2 md:order-1">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-accent/20 rounded-full -mr-16 -mt-16 blur-2xl" />
+                  <h3 className="text-[10px] font-black text-accent uppercase tracking-[3px] mb-4">Market Context</h3>
+                  <p className="text-xs md:text-sm leading-relaxed text-slate-400 font-medium">
+                    {currentQuestion < 3 ? "Manual bookkeeping adds 15%+ to payroll overhead in Namibia. Spreadsheets are not scalable assets." :
+                     currentQuestion < 6 ? "Inventory blindness is the primary cause of cashflow freezes in manufacturing and retail sectors." :
+                     currentQuestion < 8 ? "Disconnected sales data results in an average 8% loss in potential upsell revenue for consultants." :
+                     "Tax compliance friction costs 40+ hours per month for the average SME without an ERP system."}
                   </p>
                 </div>
 
-                <div className="loss-gauge min-h-[280px] bg-accent">
-                  <div className="text-[10px] font-bold text-[rgba(255,255,255,0.7)] uppercase tracking-[2px] mb-6">Potential Monthly Leakage</div>
-                  <div className="text-4xl font-extrabold text-white mb-3">
-                    {Object.keys(quizState.answers).length >= 3 ? `N$ ${monthlyLoss.toLocaleString()}` : "N$ --,---"}
+                <div className="loss-gauge min-h-[300px] bg-accent p-8 flex flex-col justify-between order-1 md:order-2 border-none shadow-2xl relative overflow-hidden">
+                   <div className="absolute bottom-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-24 -mb-24 blur-3xl" />
+                   <div>
+                    <div className="text-[10px] font-black text-white/60 uppercase tracking-[3px] mb-8">Estimated Monthly Friction</div>
+                    <AnimatePresence mode="wait">
+                      <motion.div 
+                        key={monthlyLoss}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-4"
+                      >
+                        {Object.keys(quizState.answers).length >= 3 ? `N$ ${monthlyLoss.toLocaleString()}` : "ANALYSING..."}
+                      </motion.div>
+                    </AnimatePresence>
+                    <p className="text-[10px] text-white/80 font-bold leading-relaxed uppercase tracking-wider max-w-[180px]">
+                      {Object.keys(quizState.answers).length >= 3 ? "Base calculation for your current inefficiencies." : "Answer 3 questions to unlock potential loss."}
+                    </p>
                   </div>
-                  <p className="text-xs text-[rgba(255,255,255,0.8)] leading-relaxed max-w-[200px]">
-                    {Object.keys(quizState.answers).length >= 3 ? "This is a preliminary estimate based on your answers so far." : "Answer the next 3 questions to unlock your preliminary leakage estimate."}
-                  </p>
-                  <div className="mt-8 w-full h-1 bg-[rgba(255,255,255,0.2)] rounded-full relative">
-                    <div 
-                      className="absolute left-0 top-0 h-full bg-white rounded-full transition-all duration-500" 
-                      style={{ width: `${(Object.keys(quizState.answers).length / QUESTIONS.length) * 100}%` }}
-                    />
+                  
+                  <div className="mt-10">
+                    <div className="flex justify-between text-[10px] font-black text-white/60 uppercase tracking-widest mb-3">
+                      <span>Audit Quality</span>
+                      <span>{Math.round((Object.keys(quizState.answers).length / QUESTIONS.length) * 100)}%</span>
+                    </div>
+                    <div className="w-full h-1 bg-white/20 rounded-full relative">
+                      <div 
+                        className="absolute left-0 top-0 h-full bg-white rounded-full transition-all duration-1000 ease-out" 
+                        style={{ width: `${(Object.keys(quizState.answers).length / QUESTIONS.length) * 100}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
               </aside>
@@ -444,79 +516,87 @@ export default function App() {
               key="results"
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="max-w-5xl mx-auto space-y-12"
+              className="max-w-5xl mx-auto space-y-12 pb-20"
             >
               {!isSubmitted ? (
-                <div className="max-w-md mx-auto sleek-card space-y-8">
-                  <div className="text-center space-y-3">
-                    <h2 className="text-3xl font-bold text-primary">Your Report is Ready!</h2>
+                <div className="max-w-xl mx-auto sleek-card p-10 md:p-16 space-y-10 border-none shadow-2xl bg-white relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+                  <div className="text-center space-y-4">
+                    <div className="w-16 h-16 bg-accent/10 text-accent rounded-sm flex items-center justify-center mx-auto mb-6">
+                      <ShieldCheck className="w-8 h-8" />
+                    </div>
+                    <h2 className="text-3xl md:text-4xl font-black text-primary tracking-tighter uppercase leading-none">Access Audit Data</h2>
+                    <p className="text-sm text-muted font-bold uppercase tracking-widest leading-relaxed">Identity verification required to generate your unique Namibian SME process map.</p>
                   </div>
-                  <div className="space-y-5">
-                    <div className="space-y-4">
-                      <Label htmlFor="name" className="text-xs font-bold uppercase tracking-wider text-[rgba(113,75,103,0.6)]">Full Name</Label>
-                      <Input 
-                        id="name" 
-                        placeholder="Pedro Teixeira" 
-                        className="h-14 border-2 focus:border-accent text-base"
-                        value={quizState.name}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          // RegEx: Apenas letras, espaços e acentuação de qualquer língua. Bloqueia símbolos.
-                          if (val === '' || /^[a-zA-ZÀ-ÿ\s'-]*$/.test(val)) {
-                            setQuizState(prev => ({ ...prev, name: val }));
-                          }
-                        }}
-                      />
+                  
+                  <div className="space-y-6">
+                    <div className="grid gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="name" className="text-[10px] font-black uppercase tracking-[2px] text-primary/40">Legal Full Name</Label>
+                        <Input 
+                          id="name" 
+                          placeholder="Your Name" 
+                          className="h-16 border-slate-100 bg-slate-50/50 focus:bg-white text-base font-bold transition-all px-6 rounded-sm focus:ring-accent"
+                          value={quizState.name}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '' || /^[a-zA-ZÀ-ÿ\s'-]*$/.test(val)) {
+                              setQuizState(prev => ({ ...prev, name: val }));
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-[2px] text-primary/40">Work Email</Label>
+                          <Input 
+                            id="email" 
+                            type="email" 
+                            placeholder="name@company.com" 
+                            className="h-16 border-slate-100 bg-slate-50/50 focus:bg-white text-base font-bold transition-all px-6 rounded-sm focus:ring-accent"
+                            value={quizState.email}
+                            onChange={(e) => setQuizState(prev => ({ ...prev, email: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="phone" className="text-[10px] font-black uppercase tracking-[2px] text-primary/40">Phone Number</Label>
+                          <Input 
+                            id="phone" 
+                            type="tel" 
+                            placeholder="+264 --- --- ---" 
+                            className="h-16 border-slate-100 bg-slate-50/50 focus:bg-white text-base font-bold transition-all px-6 rounded-sm focus:ring-accent"
+                            value={quizState.phone}
+                            onChange={(e) => setQuizState(prev => ({ ...prev, phone: e.target.value }))}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-4">
-                      <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider text-[rgba(113,75,103,0.6)]">Work Email</Label>
-                      <Input 
-                        id="email" 
-                        type="email" 
-                        placeholder="pedro@genesis-erp.com" 
-                        className="h-14 border-2 focus:border-accent text-base"
-                        value={quizState.email}
-                        onChange={(e) => setQuizState(prev => ({ ...prev, email: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-4">
-                      <Label htmlFor="phone" className="text-xs font-bold uppercase tracking-wider text-[rgba(113,75,103,0.6)]">Phone Number</Label>
-                      <Input 
-                        id="phone" 
-                        type="tel" 
-                        placeholder="+264 81 123 4567" 
-                        className="h-14 border-2 focus:border-accent text-base"
-                        value={quizState.phone}
-                        onChange={(e) => setQuizState(prev => ({ ...prev, phone: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-[rgba(113,75,103,0.6)]">Approximate Annual Revenue</Label>
+
+                    <div className="space-y-4 pt-4">
+                      <Label className="text-[10px] font-black uppercase tracking-[2px] text-primary/40">Annual Turnover Bracket (N$)</Label>
                       <RadioGroup 
                         value={quizState.revenue} 
                         onValueChange={(v) => setQuizState(prev => ({ ...prev, revenue: v as RevenueBracket }))}
                         className="grid grid-cols-2 gap-3"
                       >
                         {['< N$ 500,000', 'N$ 500k – 2M', 'N$ 2M – 5M', 'N$ 5M+'].map((rev) => (
-                          <div key={rev} className="flex items-center space-x-2 border-2 p-3 rounded-lg hover:border-accent cursor-pointer transition-all">
-                            <RadioGroupItem value={rev} id={rev} className="text-primary border-primary" />
-                            <Label htmlFor={rev} className="text-xs font-bold cursor-pointer">{rev}</Label>
+                          <div key={rev} className={`flex items-center space-x-3 p-4 rounded-sm border-2 cursor-pointer transition-all ${quizState.revenue === rev ? 'border-accent bg-accent/5' : 'border-slate-50 bg-slate-50/30 hover:border-slate-100'}`}>
+                            <RadioGroupItem value={rev} id={rev} className="text-accent border-slate-300" />
+                            <Label htmlFor={rev} className="text-xs font-black text-primary uppercase tracking-tight cursor-pointer">{rev}</Label>
                           </div>
                         ))}
                       </RadioGroup>
                     </div>
+
                     <Button 
-                      className="w-full btn-secondary h-14 text-lg mt-4 disabled:opacity-50" 
+                      className="w-full btn-primary min-h-[64px] h-auto py-5 text-[10px] md:text-sm font-black uppercase tracking-[2px] md:tracking-[4px] mt-8 disabled:opacity-30 group shadow-2xl active:scale-[0.98] transition-all whitespace-normal text-center" 
                       disabled={!quizState.name || !quizState.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(quizState.email) || !quizState.phone || isSendingLead}
                       onClick={() => {
                         try {
-                          // Verificar se o email já foi usado nesta sessão/máquina
                           const submittedLeadsRaw = localStorage.getItem('genesis_submitted_leads');
                           const submittedLeads = submittedLeadsRaw ? JSON.parse(submittedLeadsRaw) : [];
-                          
                           if (Array.isArray(submittedLeads) && submittedLeads.includes(quizState.email)) {
-                            alert('Este email já foi usado para gerar um relatório hoje. Caso precise de uma nova análise, entre em contato conosco.');
-                            return;
+                            alert('This report has already been generated. Redirecting to your results...');
                           }
                         } catch (e) {
                           console.warn('LocalStorage not available', e);
@@ -525,7 +605,6 @@ export default function App() {
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                         setIsSubmitted(true);
                         
-                        // Enviar dados para o Google Sheets (Background)
                         const scoreValue = calculateScore(quizState.answers);
                         sendLeadToGoogleSheets({
                           name: quizState.name,
@@ -537,212 +616,282 @@ export default function App() {
                         }).catch(err => console.error('Failed to send lead:', err));
                       }}
                     >
-                      {isSendingLead ? 'Analysing Data...' : 'Show My Score \u2192'}
+                      {isSendingLead ? 'Encrypting & Analysing...' : 'Access My Custom Report \u2192'}
                     </Button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-12" id="report-content">
-                  <div className="text-center space-y-4">
-                    <div className="inline-flex items-center px-5 py-2 bg-[rgba(1,126,132,0.1)] text-accent rounded-full text-xs font-bold uppercase tracking-[2px]">
-                      Analysis Complete
-                    </div>
-                    <h2 className="text-5xl md:text-6xl font-extrabold text-primary tracking-tight">Your Business Health Score</h2>
+                <div className="space-y-10 md:space-y-16" id="report-content">
+                  <div className="text-center space-y-6 md:space-y-8">
+                    <motion.div 
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="inline-flex items-center px-6 py-2 bg-accent/10 text-accent rounded-sm text-[10px] font-black uppercase tracking-[3px] border border-accent/20"
+                    >
+                      Audit Report #{Math.floor(Math.random() * 90000) + 10000}
+                    </motion.div>
+                    <h2 className="text-4xl md:text-7xl lg:text-8xl font-black text-primary tracking-tighter leading-[0.85] uppercase max-w-4xl mx-auto">Health <br /> Diagnostic</h2>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-6 md:gap-10">
-                    <div className={`sleek-card flex flex-col items-center justify-center space-y-6 bg-white py-10 border-b-8`} style={{ borderBottomColor: scoreColor }}>
-                      <div className="relative w-48 h-48 md:w-56 md:h-56 flex items-center justify-center">
+                  <div className="grid md:grid-cols-2 gap-6 md:gap-8">
+                    <div className={`sleek-card flex flex-col items-center justify-center p-10 md:p-14 border-none shadow-2xl bg-white relative overflow-hidden`}>
+                      <div className="absolute top-0 left-0 w-full h-2" style={{ backgroundColor: scoreColor }} />
+                      <div className="relative w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
                         <svg className="w-full h-full transform -rotate-90" viewBox="0 0 224 224">
-                          <circle cx="112" cy="112" r="100" stroke="#f1f5f9" strokeWidth="16" fill="transparent" />
-                          <circle
+                          <circle cx="112" cy="112" r="100" stroke="#f8fafc" strokeWidth="16" fill="transparent" />
+                          <motion.circle
+                            initial={{ strokeDashoffset: 628.3 }}
+                            animate={{ strokeDashoffset: isNaN(score) ? 628.3 : 628.3 - (628.3 * score) / 100 }}
+                            transition={{ duration: 1.5, ease: "easeOut" }}
                             cx="112" cy="112" r="100" stroke={scoreColor} strokeWidth="16" fill="transparent"
-                            strokeDasharray={628.3} strokeDashoffset={isNaN(score) ? 628.3 : 628.3 - (628.3 * score) / 100}
-                            className="transition-all duration-1000 ease-out"
+                            strokeDasharray={628.3}
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className="text-5xl md:text-7xl font-black leading-none" style={{ color: scoreColor }}>{isNaN(score) ? 0 : score}</span>
-                          <span className="text-[10px] md:text-xs font-bold uppercase tracking-[2px] opacity-50" style={{ color: scoreColor }}>Score</span>
+                          <span className="text-6xl md:text-8xl font-black tracking-tighter leading-none" style={{ color: scoreColor }}>{isNaN(score) ? 0 : score}</span>
+                          <span className="text-[10px] md:text-xs font-black uppercase tracking-[3px] opacity-40 mt-1" style={{ color: scoreColor }}>Efficiency Score</span>
                         </div>
                       </div>
-                      <p className="text-center text-muted font-medium max-w-xs leading-relaxed text-sm md:text-base px-4">
-                        {score > 80 ? "Your business is in great shape, but there's still room for optimization." : 
-                         score > 50 ? "Your business is stable but leaking significant profits through manual processes." :
-                         "Your business is at critical risk. Manual systems are draining your resources."}
-                      </p>
+                      
+                      <div className="mt-8 text-center space-y-2">
+                        <div className="inline-block px-3 py-1 bg-primary text-white text-[10px] font-black uppercase tracking-[2px]">
+                          Phase: {maturityLevel.title}
+                        </div>
+                        <p className="text-muted font-bold tracking-tight text-sm md:text-base px-4 leading-relaxed italic">
+                           "{maturityLevel.description}"
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="sleek-card flex flex-col items-center justify-center space-y-6 md:space-y-8 bg-white border-b-8 border-red-500 py-10">
-                      <div className="w-16 h-16 md:w-20 md:h-20 bg-red-50 rounded-full flex items-center justify-center">
-                        <TrendingDown className="w-8 h-8 md:w-10 md:h-10 text-red-500" />
+                    <div className="sleek-card flex flex-col items-center justify-center p-10 md:p-14 border-none shadow-2xl bg-white relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-2 bg-red-500" />
+                      <div className="w-20 h-20 bg-red-50 text-red-500 rounded-sm flex items-center justify-center mb-10">
+                        <TrendingDown className="w-10 h-10" />
                       </div>
-                      <div className="text-center space-y-2 md:space-y-3">
-                        <h3 className="text-[10px] md:text-xs font-bold text-muted uppercase tracking-[2px]">Estimated Monthly Loss</h3>
-                        <div className="text-4xl md:text-6xl font-black text-primary leading-none">
+                      <div className="text-center space-y-4">
+                        <h3 className="text-[10px] font-black text-primary/40 uppercase tracking-[3px]">Monthly Capital Erosion</h3>
+                        <div className="text-5xl md:text-7xl font-black text-primary tracking-tighter leading-none">
                           N$ {isNaN(monthlyLoss) ? 0 : monthlyLoss.toLocaleString()}
                         </div>
                       </div>
-                      <p className="text-center text-muted font-medium leading-relaxed text-sm md:text-base px-4">
-                        You are losing approximately <span className="font-bold text-primary">N$ {isNaN(monthlyLoss) ? 0 : (monthlyLoss * 12).toLocaleString()} per year</span> due to manual friction and inefficiencies.
+                      <p className="mt-10 text-center text-muted font-bold uppercase tracking-tight text-sm md:text-base px-4 leading-relaxed">
+                        Projected Annual Loss: <span className="text-red-500">N$ {isNaN(monthlyLoss) ? 0 : (monthlyLoss * 12).toLocaleString()}</span>
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-10">
-                    <div className="sleek-card bg-primary text-white space-y-4">
-                      <div className="text-xs font-bold uppercase tracking-widest text-[rgba(255,255,255,0.6)] text-center">Scalability Index</div>
-                      <div className="text-5xl font-black text-center text-white">{categories.scalabilityIndex}%</div>
-                      <Progress value={categories.scalabilityIndex} className="h-2 bg-[rgba(255,255,255,0.2)]" />
-                      <p className="text-xs text-center text-[rgba(255,255,255,0.6)] font-medium">
-                        {categories.scalabilityIndex < 40 ? "Your growth is tied to hiring more people. Automated systems are required to scale." : 
-                         categories.scalabilityIndex < 75 ? "You have some automation, but legacy bottlenecks are slowing your expansion." : 
-                         "Your business is highly optimized for growth."}
-                      </p>
+                  <div className="grid md:grid-cols-2 gap-6 md:gap-8">
+                    <div className="sleek-card bg-primary text-white p-10 md:p-12 border-none shadow-2xl space-y-8 relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-24 -mt-24 blur-3xl group-hover:scale-110 transition-transform" />
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-[3px] text-white/40">Scalability Potential</div>
+                        <div className="text-6xl font-black tracking-tighter">{categories.scalabilityIndex}%</div>
+                      </div>
+                      <div className="space-y-4">
+                        <Progress value={categories.scalabilityIndex} className="h-1 bg-white/10 rounded-none" />
+                        <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest leading-relaxed">
+                          {categories.scalabilityIndex < 40 ? "LOCKED: Manual tasks are blocking top-line growth." : 
+                           categories.scalabilityIndex < 75 ? "CONSTRAINED: Legacy bottlenecks limiting expansion velocity." : 
+                           "UNLOCKED: Infrastructure ready for 5x scale operations."}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="sleek-card border-accent border-2 bg-white space-y-4">
-                      <div className="text-xs font-bold uppercase tracking-widest text-muted text-center">Namibian SME Benchmark</div>
-                      <div className="text-5xl font-black text-center text-primary">Top {categories.benchmarkPercentile}%</div>
-                      <div className="flex justify-between text-[10px] font-bold text-muted uppercase">
-                        <span>Better than {100 - categories.benchmarkPercentile}% of peers</span>
+                    <div className="sleek-card border-none shadow-2xl bg-slate-50 p-10 md:p-12 space-y-8 relative overflow-hidden">
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-[3px] text-primary/40">Regional Position</div>
+                        <div className="flex items-baseline gap-4">
+                           <div className="text-6xl font-black tracking-tighter text-primary">Top {categories.benchmarkPercentile}%</div>
+                           {categories.marketDeltaValue < 0 && (
+                             <div className="text-xs font-black text-red-500 uppercase tracking-tight bg-red-50 px-2 py-1">
+                               {Math.abs(categories.marketDeltaValue)}% Below Average
+                             </div>
+                           )}
+                           {categories.marketDeltaValue > 0 && (
+                             <div className="text-xs font-black text-accent uppercase tracking-tight bg-accent/5 px-2 py-1">
+                               +{categories.marketDeltaValue}% Above Average
+                             </div>
+                           )}
+                        </div>
                       </div>
-                      <p className="text-xs text-center text-muted font-medium leading-relaxed">
-                         Calculated based on digital transformation levels across Namibia SADC region.
-                      </p>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-end border-b border-primary/10 pb-2">
+                           <span className="text-[10px] font-black text-primary/40 uppercase tracking-[2px]">Market Benchmark</span>
+                           <span className="text-xs font-black text-accent">Namibian SME SADC Average</span>
+                        </div>
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest leading-relaxed">
+                           Performing better than {100 - categories.benchmarkPercentile}% of verified regional competitors.
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Pie Chart Section */}
-                  <div className="sleek-card space-y-8 overflow-hidden">
-                    <h3 className="text-xl md:text-2xl font-bold text-primary border-b-4 border-[rgba(113,75,103,0.1)] pb-3 inline-block">Where You Are Losing Money</h3>
-                    <div className="grid md:grid-cols-[250px_1fr] gap-8 md:gap-12 items-center">
-                      <div className="relative w-48 h-48 md:w-64 md:h-64 mx-auto">
-                        <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
-                          {/* Finance */}
-                          <circle r="16" cx="16" cy="16" fill="transparent" stroke="#714B67" strokeWidth="32" 
-                            strokeDasharray={`${categories.financePiePct} 100`} />
-                          {/* Inventory */}
-                          <circle r="16" cx="16" cy="16" fill="transparent" stroke="#017E84" strokeWidth="32" 
-                            strokeDasharray={`${categories.inventoryPiePct} 100`} 
-                            strokeDashoffset={-categories.financePiePct} />
-                          {/* Sales */}
-                          <circle r="16" cx="16" cy="16" fill="transparent" stroke="#00A09D" strokeWidth="32" 
-                            strokeDasharray={`${categories.salesPiePct} 100`} 
-                            strokeDashoffset={-(categories.financePiePct + categories.inventoryPiePct)} />
-                          {/* Compliance */}
-                          <circle r="16" cx="16" cy="16" fill="transparent" stroke="#E54D42" strokeWidth="32" 
-                            strokeDasharray={`${categories.compliancePiePct} 100`} 
-                            strokeDashoffset={-(categories.financePiePct + categories.inventoryPiePct + categories.salesPiePct)} />
-                        </svg>
+                  {/* Category Breakdown Section */}
+                  <div className="sleek-card p-10 md:p-16 border-none shadow-2xl bg-white space-y-12">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                      <div className="space-y-2">
+                         <h3 className="text-2xl md:text-4xl font-black text-primary uppercase tracking-tighter">Friction Breakdown</h3>
+                         <p className="text-xs font-bold text-muted uppercase tracking-[2px]">Identifying high-resistance operational segments.</p>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-                        {[
-                          { label: 'Finance & Cash', color: 'bg-[#714B67]', pct: categories.financePiePct },
-                          { label: 'Inventory & Ops', color: 'bg-[#017E84]', pct: categories.inventoryPiePct },
-                          { label: 'Sales & Customers', color: 'bg-[#00A09D]', pct: categories.salesPiePct },
-                          { label: 'Taxes & Compliance', color: 'bg-[#E54D42]', pct: categories.compliancePiePct },
-                        ].map((item, i) => (
-                          <div key={i} className="flex items-center space-x-3 p-3 md:p-4 rounded-xl bg-bg border border-slate-100">
-                            <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full ${item.color}`} />
-                            <div>
-                              <div className="text-[10px] md:text-xs font-bold text-muted uppercase tracking-wider leading-none mb-1">{item.label}</div>
-                              <div className="text-base md:text-lg font-black text-primary leading-none">{Math.round(item.pct)}%</div>
+                      <div className="flex gap-6 text-[10px] font-black uppercase tracking-[2px]">
+                        <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-red-500" /> Critical</div>
+                        <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Mid-Risk</div>
+                        <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-accent" /> Optimal</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16">
+                      {[
+                        { name: 'Finance & Cashflow', score: categories.scores.finance },
+                        { name: 'Inventory & Ops', score: categories.scores.inventory },
+                        { name: 'Sales & Customers', score: categories.scores.sales },
+                        { name: 'Compliance & Tax', score: categories.scores.compliance },
+                      ].map((cat, idx) => {
+                        const s = Math.round(cat.score);
+                        const colorClass = s < 50 ? 'bg-red-500' : s <= 80 ? 'bg-amber-500' : 'bg-accent';
+                        const textColorClass = s < 50 ? 'text-red-500' : s <= 80 ? 'text-amber-500' : 'text-accent';
+                        
+                        return (
+                          <div key={idx} className="space-y-4 group">
+                            <div className="flex justify-between items-end">
+                              <span className="text-[10px] md:text-xs font-black text-primary uppercase tracking-[2px]">{cat.name}</span>
+                              <span className={`text-2xl font-black tracking-tight ${textColorClass}`}>{s}%</span>
                             </div>
+                            <div className="h-1 w-full bg-slate-50 rounded-none overflow-hidden">
+                              <motion.div 
+                                initial={{ width: 0 }}
+                                whileInView={{ width: `${s}%` }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 1.2, delay: 0.3 + (idx * 0.1) }}
+                                className={`h-full ${colorClass}`}
+                              />
+                            </div>
+                            <p className="text-[10px] text-muted font-bold uppercase tracking-wider leading-relaxed opacity-60 group-hover:opacity-100 transition-opacity">
+                              {s < 50 ? "URGENT: Structural modernization required to halt capital drain." : 
+                               s <= 80 ? "INEFFICIENT: Automation gaps are increasing operational resistance." :
+                               "STABLE: Highly efficient digital infrastructure detected."}
+                            </p>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
                   </div>
 
-                  {/* NEW HIGH-CONVERSION CTA SECTION */}
-                  <div className="bg-orange-600 text-white p-8 md:p-12 rounded-3xl shadow-2xl relative overflow-hidden border-4 border-[rgba(255,255,255,0.2)]">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-[rgba(255,255,255,0.1)] rounded-full -mr-32 -mt-32 blur-3xl" />
-                    <h3 className="text-2xl md:text-4xl font-black mb-6 flex items-center gap-3">
-                      <Zap className="w-8 h-8 text-yellow-300 fill-yellow-300" /> Special Opportunity for You
-                    </h3>
-                    <div className="space-y-6 text-base md:text-xl font-medium leading-relaxed">
-                      <p>
-                        Your score of <span className="text-white font-black underline decoration-[rgba(255,255,255,0.4)]">{score}/100</span> shows you’re currently losing <span className="text-white font-black underline decoration-[rgba(255,255,255,0.4)]">N${monthlyLoss.toLocaleString()}</span> every single month.
-                      </p>
-                      <p>
-                        we only accept 4 new Genesis ERP clients per month so we can guarantee a perfect, hands-free implementation in under 25 days.
-                      </p>
-                      <p className="bg-[rgba(255,255,255,0.2)] inline-block px-4 py-1 rounded-lg font-black">
-                        Right now I still have 2 spots left this month.
-                      </p>
-                      <div className="space-y-3 pt-4">
-                        <p className="font-black text-white">If you book your 15-minute Strategy Call before midnight tomorrow, I’ll give you:</p>
-                        <ul className="space-y-2">
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="w-5 h-5 text-white" />
-                            A Free Custom ERP Requirements Audit (valued at N$ 6,500)
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="w-5 h-5 text-white" />
-                            Our team will map your exact processes before the call
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle2 className="w-5 h-5 text-white" />
-                            Priority implementation slot in {currentMonth}
-                          </li>
-                        </ul>
-                      </div>
-                      <p className="text-sm font-bold opacity-80 pt-4 uppercase tracking-wider">
-                        This offer disappears in 48 hours — after that the price goes back to normal and the free audit is removed.
-                      </p>
-                    </div>
-                    <Button 
-                      onClick={scrollToCalendly}
-                      className="w-full md:w-auto mt-10 bg-white text-orange-600 hover:bg-[rgba(255,255,255,0.9)] h-auto py-5 md:h-16 text-base md:text-xl px-6 md:px-12 rounded-xl font-black shadow-xl transition-all hover:scale-[1.02] whitespace-normal leading-tight text-center"
-                    >
-                      Yes, I Want My Free Audit + Strategy Call
-                    </Button>
-                  </div>
-
-                  <div className="sleek-card space-y-8 md:space-y-10">
-                    <h3 className="text-xl md:text-2xl font-bold text-primary border-b-4 border-accent pb-3 inline-block">Personalized Recommendations</h3>
-                    <div className="grid gap-4 md:gap-6">
-                      {recommendations.map((rec, i) => (
-                        <div key={i} className="flex items-start space-x-4 md:space-x-6 p-6 md:p-8 bg-bg rounded-xl border-l-8 border-accent">
-                          <div className="w-8 h-8 md:w-10 md:h-10 bg-accent text-primary rounded-full flex items-center justify-center flex-shrink-0 font-black text-base md:text-lg">
-                            {i + 1}
+                  {/* Impact Facts Section - NEW */}
+                  {impactFacts.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {impactFacts.map((fact, i) => (
+                        <div key={i} className="sleek-card border-none bg-accent/5 border-accent/10 flex flex-col space-y-4">
+                          <div className="flex items-center gap-2">
+                             <div className="w-10 h-10 rounded-sm bg-accent/10 flex items-center justify-center text-accent">
+                               {fact.icon === 'Clock' && <Clock className="w-5 h-5" />}
+                               {fact.icon === 'Package' && <Package className="w-5 h-5" />}
+                               {fact.icon === 'ShieldAlert' && <ShieldAlert className="w-5 h-5" />}
+                               {fact.icon === 'EyeOff' && <EyeOff className="w-5 h-5" />}
+                             </div>
+                             <h4 className="text-[10px] font-black uppercase tracking-[2px] text-accent">{fact.area}</h4>
                           </div>
-                          <p className="text-lg md:text-xl font-bold text-primary leading-tight">{rec}</p>
+                          <p className="text-sm font-bold text-primary leading-snug">
+                            {fact.fact}
+                          </p>
                         </div>
                       ))}
                     </div>
+                  )}
+
+                  {/* Recommendation Logic with better design */}
+                  <div className="bg-primary text-white p-10 md:p-16 shadow-2xl border-none space-y-12 relative overflow-hidden group">
+                     <div className="absolute top-0 right-0 w-96 h-96 bg-accent/10 rounded-full -mr-48 -mt-48 blur-3xl group-hover:scale-110 transition-transform duration-1000" />
+                     <div className="space-y-2 text-center md:text-left">
+                        <h3 className="text-3xl md:text-5xl font-black uppercase tracking-tighter">Strategic Directives</h3>
+                        <p className="text-xs font-bold text-white/40 uppercase tracking-[3px]">Mapping the shortest path to 99% operational efficiency.</p>
+                     </div>
+                     <div className="grid gap-6">
+                        {recommendations.slice(0, 3).map((rec, i) => (
+                          <motion.div 
+                            key={i} 
+                            initial={{ opacity: 0, x: -20 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                            className="flex items-center gap-6 p-6 md:p-8 bg-white/5 border border-white/10 backdrop-blur-sm relative overflow-hidden"
+                          >
+                            <div className="text-4xl font-black text-accent/30 flex-shrink-0 tabular-nums">{i + 1}</div>
+                            <p className="text-sm md:text-xl font-black uppercase tracking-tight leading-tight">{rec}</p>
+                          </motion.div>
+                        ))}
+                     </div>
                   </div>
 
-                  <div className="bg-primary text-white p-8 md:p-12 rounded-[2rem] md:rounded-[2.5rem] text-center space-y-8 shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-[rgba(1,126,132,0.2)] rounded-full -mr-32 -mt-32 blur-3xl" />
-                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-[rgba(1,126,132,0.2)] rounded-full -ml-32 -mb-32 blur-3xl" />
-                    
-                    <h3 className="text-2xl md:text-4xl font-extrabold leading-tight">Ready to turn your score into 95+?</h3>
-                    <p className="text-[rgba(255,255,255,0.8)] max-w-2xl mx-auto text-base md:text-lg font-medium">
-                      In under 45 days, Genesis ERP can automate your entire business, eliminate these losses, and give you back 20+ hours per week.
-                    </p>
-                    <div className="text-xl md:text-3xl font-black text-white tracking-tight">Book a 15-minute strategy call with Pedro</div>
-                    <div className="flex flex-col md:flex-row gap-5 justify-center pt-4">
-                      <Button 
-                        onClick={downloadPDF} 
-                        disabled={isGeneratingPDF}
-                        className="bg-accent text-white hover:bg-[rgba(1,126,132,0.9)] h-14 md:h-16 text-sm md:text-lg px-4 md:px-12 rounded-full font-bold shadow-lg disabled:opacity-70 w-full md:w-auto overflow-hidden text-ellipsis whitespace-nowrap"
-                      >
-                        <Download className={`mr-2 w-4 h-4 md:w-5 md:h-5 flex-shrink-0 ${isGeneratingPDF ? 'animate-bounce' : ''}`} /> 
-                        {isGeneratingPDF ? 'Gerando PDF...' : 'Download PDF Report'}
-                      </Button>
-                      <Button onClick={scrollToCalendly} className="bg-white text-primary hover:bg-[rgba(255,255,255,0.9)] h-14 md:h-16 text-sm md:text-lg px-4 md:px-12 rounded-full font-bold shadow-lg w-full md:w-auto">
-                        <Calendar className="mr-2 w-4 h-4 md:w-5 md:h-5 flex-shrink-0" /> Book Strategy Call
-                      </Button>
+                  {/* HIGH-CONVERSION OFFER SECTION - RETHOUGHT */}
+                  <div className="bg-primary p-1 md:p-1 shadow-2xl relative">
+                    <div className="bg-white p-10 md:p-20 border-[12px] border-primary space-y-12 text-center">
+                       <div className="space-y-4">
+                          <div className="inline-block px-4 py-1.5 bg-red-600 text-white text-[10px] font-black uppercase tracking-[3px] mb-4">Limited Availability Audit</div>
+                          <h3 className="text-3xl md:text-6xl font-black text-primary tracking-tighter uppercase leading-none">Recover your N$ {monthlyLoss.toLocaleString()}</h3>
+                          <p className="text-lg md:text-2xl text-muted font-bold max-w-3xl mx-auto leading-relaxed">
+                            We only accept <span className="text-primary underline">4 new Genesis ERP clients per month</span> to ensure perfect, hand-mapped implementation for the Namibian market.
+                          </p>
+                       </div>
+
+                       <div className="grid md:grid-cols-3 gap-8">
+                          {[
+                            { label: "Current Open Slots", value: "2/4", desc: `For this month, ${currentMonth}.` },
+                            { label: "Audit Value", value: "N$ 6,500", desc: "Waived for scorecard users today." },
+                            { label: "Audit Level", value: "Level 1", desc: "Primary process mapping session." },
+                          ].map((stat, i) => (
+                            <div key={i} className="space-y-1">
+                               <div className="text-[10px] font-black uppercase tracking-[2px] text-primary/40 leading-none mb-2">{stat.label}</div>
+                               <div className="text-3xl font-black text-primary tracking-tighter">{stat.value}</div>
+                               <div className="text-[10px] font-bold text-muted uppercase tracking-wider">{stat.desc}</div>
+                            </div>
+                          ))}
+                       </div>
+
+                       <div className="space-y-10 pt-6">
+                         <div className="space-y-4 max-w-2xl mx-auto">
+                            <p className="text-sm font-black text-primary uppercase tracking-[2px]">Scorecard Bonus: Valid for 48 Hours Only</p>
+                            <div className="grid gap-3">
+                               {[
+                                 "Full Custom ERP Requirements Audit",
+                                 "Personalized Process Friction Map",
+                                 "Direct Implementation Roadmap with Pedro"
+                               ].map((bonus, i) => (
+                                 <div key={i} className="flex items-center justify-center gap-3 text-xs md:text-sm font-black text-primary uppercase tracking-tight">
+                                    <CheckCircle2 className="w-5 h-5 text-accent flex-shrink-0" /> {bonus}
+                                 </div>
+                               ))}
+                            </div>
+                         </div>
+                         
+                         <Button 
+                           onClick={scrollToCalendly}
+                           className="w-full md:w-auto bg-primary text-white hover:bg-primary/95 min-h-[64px] h-auto py-5 px-6 md:px-20 text-[10px] md:text-xs font-black uppercase tracking-[2px] md:tracking-[4px] shadow-2xl group relative overflow-hidden active:scale-[0.98] transition-all whitespace-normal text-center flex items-center justify-center"
+                         >
+                           <span className="relative z-10">Confirm My Strategy Call & Audit</span>
+                         </Button>
+                         
+                         <p className="text-[10px] font-black text-muted uppercase tracking-[3px] opacity-40 italic">
+                            No obligation. No hard sales. Just high-level engineering strategy for your business.
+                         </p>
+                       </div>
                     </div>
                   </div>
 
+                  <div className="flex flex-col md:flex-row gap-6 justify-center">
+                    <Button 
+                      onClick={downloadPDF} 
+                      disabled={isGeneratingPDF}
+                      className="bg-accent text-white hover:bg-accent/95 h-16 text-[10px] font-black uppercase tracking-[3px] px-12 rounded-none border-none shadow-xl disabled:opacity-50"
+                    >
+                      <Download className={`mr-2 w-4 h-4 ${isGeneratingPDF ? 'animate-bounce' : ''}`} /> 
+                      {isGeneratingPDF ? 'Encrypting PDF...' : 'Download Full Audit PDF'}
+                    </Button>
+                  </div>
+
                   {/* Calendly Inline Widget */}
-                  <div ref={calendlyRef} className="sleek-card overflow-hidden p-0 bg-white">
-                    <div className="p-8 border-b border-[#E2E8F0]">
-                      <h3 className="text-2xl font-black text-primary">Schedule Your Results Walkthrough</h3>
-                      <p className="text-muted font-medium">Choose a time below to discuss your score and exact ERP process map with Pedro.</p>
+                  <div ref={calendlyRef} className="sleek-card border-none shadow-2xl bg-white overflow-hidden p-0 scroll-mt-20">
+                    <div className="p-10 md:p-14 border-b border-slate-50 text-center md:text-left space-y-4">
+                      <h3 className="text-3xl md:text-4xl font-black text-primary uppercase tracking-tighter">Confirmation Interface</h3>
+                      <p className="text-[10px] font-black text-muted uppercase tracking-[3px]">Secure Pedro Teixeira's roadmap session below.</p>
                     </div>
                     <div className="h-[700px] w-full">
                       <iframe

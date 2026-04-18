@@ -1,6 +1,18 @@
 
 import { QuizState, QUESTIONS, RevenueBracket, BusinessType } from '../types';
 
+export interface ImpactFact {
+  area: string;
+  fact: string;
+  icon: string;
+}
+
+export interface MaturityLevel {
+  title: string;
+  status: 'Critical' | 'Warning' | 'Healthy';
+  description: string;
+}
+
 export const calculateScore = (answers: Record<number, number>, businessType: BusinessType = 'Mixed') => {
   let totalWeightedPoints = 0;
   let maxPossibleWeightedPoints = 0;
@@ -8,15 +20,15 @@ export const calculateScore = (answers: Record<number, number>, businessType: Bu
 
   // 1. Defining Weights by Business Type
   const weights: Record<string, number> = {
-    'Cash & Finance': 1.5,
+    'Cash & Finance': 1.6, // High weight always
     'Taxes & Compliance': 1.2,
     'Sales & Customers': 1.0,
-    'Inventory & Operations': businessType === 'Services' ? 0.6 : 1.0, // Less weight for services
+    'Inventory & Operations': businessType === 'Services' ? 0.4 : 1.2, // Drastic difference
   };
 
   // Adjusting Sales weight for Services
   if (businessType === 'Services') {
-    weights['Sales & Customers'] = 1.4;
+    weights['Sales & Customers'] = 1.6;
   }
 
   QUESTIONS.forEach((q) => {
@@ -29,11 +41,13 @@ export const calculateScore = (answers: Record<number, number>, businessType: Bu
       const pts = q.options[answerIndex].points;
       totalWeightedPoints += pts * weight;
 
-      // 2. Red Flags (Penalties)
-      // Q2: Cash visibility (id: 2)
-      if (q.id === 2 && pts === 0) penalty += 15; // "No idea" on cashflow
-      // Q10: Tax penalties (id: 10)
-      if (q.id === 10 && pts === 0) penalty += 10; // Multiple penalties
+      // 2. Structural Red Flags
+      // Q2: Cash visibility (id: 2) - No visibility is a massive penalty
+      if (q.id === 2 && pts === 0) penalty += 12; 
+      // Q10: Tax penalties (id: 10) - Legal risk
+      if (q.id === 10 && pts === 0) penalty += 8; 
+      // Q1: Extreme manual labor hours
+      if (q.id === 1 && pts === 0) penalty += 5;
     }
   });
 
@@ -43,21 +57,93 @@ export const calculateScore = (answers: Record<number, number>, businessType: Bu
 
 export const calculateMonthlyLoss = (score: number, revenue: RevenueBracket) => {
   const baseRevenue: Record<RevenueBracket, number> = {
-    '< N$ 500,000': 35000,
-    'N$ 500k – 2M': 90000,
-    'N$ 2M – 5M': 250000,
-    'N$ 5M+': 550000,
+    '< N$ 500,000': 40000,
+    'N$ 500k – 2M': 100000,
+    'N$ 2M – 5M': 280000,
+    'N$ 5M+': 650000,
   };
 
   const monthlyRevenue = baseRevenue[revenue];
   
-  // 3. Non-linear Loss (Exponential Curve)
-  // Higher inefficiency causes disproportionately higher losses
+  // Exponential Inefficiency Leakage
+  // Score of 100 = 2% floor (no system is perfect)
+  // Score of 0 = 20% leakage
   const inefficiency = (100 - score) / 100;
-  const maxLeakageRate = 0.15; // Increased slightly for higher pain
-  const exponentialFactor = Math.pow(inefficiency, 1.3); // Curve effect
+  const leakageRate = 0.02 + (0.18 * Math.pow(inefficiency, 1.4)); 
   
-  return Math.round(monthlyRevenue * maxLeakageRate * exponentialFactor);
+  return Math.round(monthlyRevenue * leakageRate);
+};
+
+export const getMaturityLevel = (score: number): MaturityLevel => {
+  if (score < 40) {
+    return {
+      title: "Reactive Chaos",
+      status: 'Critical',
+      description: "Business is running on manual life-support. Growth is physically impossible without increasing payroll overhead proportionately."
+    };
+  }
+  if (score < 70) {
+    return {
+      title: "Fragile Stability",
+      status: 'Warning',
+      description: "Functional but inefficient. Frequent manual interventions are hidden costs that erode profit margins by up to 15%."
+    };
+  }
+  return {
+    title: "Streamlined Engine",
+    status: 'Healthy',
+    description: "Strong digital foundation. Opportunity lies in advanced predictive analytics and AI-driven process optimization."
+  };
+};
+
+export const getImpactFacts = (answers: Record<number, number>, businessType: BusinessType, revenue: RevenueBracket): ImpactFact[] => {
+  const facts: ImpactFact[] = [];
+  const getOpt = (id: number) => answers[id];
+
+  // Manual Labor Impact (Q1)
+  const q1Ans = getOpt(1);
+  if (q1Ans === 3 || q1Ans === 2) {
+    const hours = q1Ans === 3 ? 12 : 8;
+    facts.push({
+      area: "Human Capital",
+      fact: `Manual data entry is consuming ~${hours * 52} hours per year. This is hidden payroll waste.`,
+      icon: "Clock"
+    });
+  }
+
+  // Inventory/Resource Impact
+  const q4Ans = getOpt(4);
+  if (q4Ans === 3 || q4Ans === 2) {
+    facts.push({
+      area: businessType === 'Services' ? "Resource Utilization" : "Inventory Leakage",
+      fact: businessType === 'Services' 
+        ? "Preventable double-booking and schedule gaps are likely reducing billable capacity by 20%." 
+        : "Uncontrolled stock levels are tying up significant working capital in 'dead stock'.",
+      icon: "Package"
+    });
+  }
+
+  // Compliance Risk
+  const q10Ans = getOpt(10);
+  if (q10Ans === 2) {
+    facts.push({
+      area: "Legal Risk",
+      fact: "Tax penalties suggest a systemic failure in financial audit trails, increasing IR investigation risk.",
+      icon: "ShieldAlert"
+    });
+  }
+
+  // Cash Flow
+  const q2Ans = getOpt(2);
+  if (q2Ans === 3 || q2Ans === 2) {
+    facts.push({
+      area: "Strategic Blindness",
+      fact: "Poor 30-day cash visibility prevents aggressive growth investments and creates payroll anxiety.",
+      icon: "EyeOff"
+    });
+  }
+
+  return facts.slice(0, 3);
 };
 
 export const calculateCategories = (answers: Record<number, number>) => {
@@ -67,16 +153,11 @@ export const calculateCategories = (answers: Record<number, number>) => {
     return sum + ((q && optIdx !== undefined && q.options[optIdx]) ? q.options[optIdx].points : 0);
   }, 0);
 
-  const fPts = getPts([1, 2, 3]);
-  const iPts = getPts([4, 5, 6]);
-  const sPts = getPts([7, 8]);
-  const cPts = getPts([9, 10, 11]);
-
   const scores = {
-    finance: (fPts / 30) * 100,
-    inventory: (iPts / 30) * 100,
-    sales: (sPts / 20) * 100,
-    compliance: (cPts / 30) * 100
+    finance: (getPts([1, 2, 3]) / 30) * 100,
+    inventory: (getPts([4, 5, 6]) / 30) * 100,
+    sales: (getPts([7, 8]) / 20) * 100,
+    compliance: (getPts([9, 10, 11]) / 30) * 100
   };
 
   const ineff = {
@@ -88,8 +169,7 @@ export const calculateCategories = (answers: Record<number, number>) => {
 
   const totalIneff = ineff.finance + ineff.inventory + ineff.sales + ineff.compliance;
 
-  // 6. Scalability Index
-  // Derived from automation-related questions (Q1, Q6, Q11)
+  // Scalability Index
   const automationQuestions = [1, 6, 11];
   const automationPts = getPts(automationQuestions);
   const scalabilityIndex = Math.round((automationPts / 30) * 100);
@@ -100,33 +180,43 @@ export const calculateCategories = (answers: Record<number, number>) => {
     salesPiePct: totalIneff === 0 ? 25 : (ineff.sales / totalIneff) * 100,
     compliancePiePct: totalIneff === 0 ? 25 : (ineff.compliance / totalIneff) * 100,
     scalabilityIndex,
-    benchmarkPercentile: Math.max(5, Math.round(scores.finance * 0.8 + scores.compliance * 0.2) - 10), // Logic for benchmarking
+    benchmarkPercentile: (() => {
+      const avgScore = (scores.finance + scores.inventory + scores.sales + scores.compliance) / 4;
+      
+      // Persuasive Benchmarking Formula:
+      // High score (90+) -> Top 7-12% (Elite)
+      // Mid score (50-70) -> Top 40-60% (Average)
+      // Low score (<40) -> Top 80-95% (Lagging)
+      let percentile = 100 - (avgScore * 0.92);
+      
+      // Floor it at 5% to keep it exclusive
+      return Math.max(5, Math.min(98, Math.round(percentile)));
+    })(),
     scores
   };
 };
 
-export const getRecommendations = (answers: Record<number, number>) => {
+export const getRecommendations = (answers: Record<number, number>, businessType: BusinessType = 'Mixed') => {
   const cats = calculateCategories(answers);
   const recommendations: string[] = [];
 
   if (cats.scores.finance < 60) {
-    recommendations.push("Implement an automated invoicing and real-time cashflow dashboard. Your current manual tracking is causing severe delays in receivables and blinding your financial decision-making.");
+    recommendations.push("Centralize bank reconciliations into a single cloud-ERP ledger. Your N$ 30-day visibility depends on eliminating CSV imports.");
   }
   if (cats.scores.inventory < 60) {
-    recommendations.push("Deploy a unified inventory management system. You are currently tying up capital in dead stock while simultaneously losing sales due to preventable stockouts.");
+    const term = businessType === 'Services' ? "Resource Utilization" : "Inventory Control";
+    recommendations.push(`Implement ${term} automation. You are currently losing ${businessType === 'Services' ? 'billable hours' : 'physical assets'} to preventable mapping errors.`);
   }
   if (cats.scores.sales < 60) {
-    recommendations.push("Integrate your CRM with your quoting system. Your sales cycle is too slow, and scattered customer data is preventing your team from upselling effectively.");
+    recommendations.push("Bridge the 'Quote-to-Cash' gap. Sales reports should auto-generate upon invoice creation, not days later from manual tallying.");
   }
   if (cats.scores.compliance < 60) {
-    recommendations.push("Digitize your tax and audit trails immediately. The time your team spends manually preparing for compliance is a massive hidden payroll cost and a major liability risk.");
+    recommendations.push("Automate VAT & Revenue reporting hooks. The time spent on compliance is currently your most expensive administrative labor cost.");
   }
 
-  // Fallback if they scored well
   if (recommendations.length === 0) {
-    recommendations.push("Your core systems are strong. Focus on advanced BI (Business Intelligence) to forecast trends and optimize your supply chain further.");
-    recommendations.push("Consider automating your vendor payment runs to capture early-payment discounts.");
-    recommendations.push("Explore customer self-service portals to reduce administrative load on your sales team.");
+    recommendations.push("Optimize your multi-entity reporting structure for future international or regional expansion.");
+    recommendations.push("Implement AI-driven demand forecasting to further sharpen inventory turnover ratios.");
   }
 
   return recommendations.slice(0, 3);
